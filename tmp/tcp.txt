@@ -1,0 +1,4 @@
+cmd/
+go.mod
+message.txt
+tmp/
