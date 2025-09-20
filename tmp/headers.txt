@@ -1,0 +1,8 @@
+Request line: 
+- Method: GET
+- Target: /use-neovim-btw
+- Version: 1.1
+Headers: 
+- host: localhost:42068
+- user-agent: curl/8.7.1
+- accept: */*
