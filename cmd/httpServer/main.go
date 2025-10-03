@@ -1,18 +1,30 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"tcp.to.http/internal/headers"
 	request "tcp.to.http/internal/requests"
 	"tcp.to.http/internal/response"
 	"tcp.to.http/internal/server"
 )
 
 const port = 42069
+
+func toStr(bytes []byte) string {
+	out := ""
+	for _, b := range bytes {
+		out += fmt.Sprintf("%02x", b)
+	}
+	return out
+}
 
 func response400() []byte {
 	return []byte(`
@@ -65,7 +77,58 @@ func main() {
 		} else if req.RequestLine.RequestTarget == "/myproblem" {
 			body = response500()
 			status = response.StatusInternalServeError
+		} else if req.RequestLine.RequestTarget == "/video" {
+			f, _ := os.ReadFile("assets/vim.mp4")
+			h.Replace("content-type", "video/mp4")
+			h.Replace("content-length", fmt.Sprintf("%d", len(f)))
+
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+
+			return
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+			target := req.RequestLine.RequestTarget
+			res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
+
+			// res, err := http.Get("https://httpbin.org/stream/2")
+			if err != nil {
+				body = response500()
+				status = response.StatusInternalServeError
+			} else {
+				w.WriteStatusLine(response.StatusOK)
+
+				h.Delete("Content-length")
+				h.Set("transfer-encoding", "chunked")
+				h.Replace("Content-Type", "text/plain")
+				h.Set("Trailer", "X-Content-SHA256")
+				h.Set("Trailer", "X-Content-Length ")
+				w.WriteHeaders(*h)
+
+				fullBody := []byte{}
+
+				for {
+					data := make([]byte, 32)
+					n, err := res.Body.Read(data)
+					if err != nil {
+						break
+					}
+
+					fullBody = append(fullBody, data[:n]...)
+					w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
+					w.WriteBody(data[:n])
+					w.WriteBody([]byte("\r\n"))
+				}
+				w.WriteBody([]byte("0\r\n"))
+				tailers := headers.NewHeaders()
+				out := sha256.Sum256(fullBody)
+				tailers.Set("X-Content-SHA256", toStr(out[:]))
+				tailers.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+				w.WriteHeaders(*tailers)
+				return
+			}
 		}
+
 		h.Replace("Content-length", fmt.Sprintf("%d", len(body)))
 		h.Replace("Content-type", "text/html")
 		w.WriteStatusLine(status)
