@@ -1,260 +1,352 @@
-# TCP-to-HTTP Server Framework
+# TCP-to-HTTP
 
-Welcome to TCP-to-HTTP, a custom HTTP/1.1 server implementation built directly on raw TCP sockets in Go. Think of it as rolling your own HTTP server from scratchâ€”no `net/http` package shortcuts here. This project gives you complete control over every byte that flows through your server, making it perfect for learning HTTP internals or building specialized server applications.
+A custom HTTP/1.1 server implementation written in Go that handles HTTP requests over TCP connections from scratch, without relying on the standard `net/http` server package.
 
-Unlike traditional Go HTTP servers that rely on the standard library's abstractions, this implementation parses HTTP requests byte-by-byte from TCP streams and handles the entire HTTP/1.1 protocol lifecycle manually. It's like building a car engine instead of just turning the key.
+## Overview
 
-## What Makes This Special
+This project implements a low-level HTTP server that parses HTTP requests directly from TCP streams and constructs HTTP responses manually. It demonstrates fundamental HTTP protocol handling including request parsing, header management, and response writing. [1](#0-0) 
 
-This repository serves dual purposes that make it both educational and practical:
+## Features
 
-**ðŸ”§ Reusable Framework**: The modular design in `internal/` packages provides building blocks for creating custom HTTP-like servers with full protocol control.
+- **Custom HTTP/1.1 Parser**: Parses HTTP requests from raw TCP byte streams
+- **Header Management**: Full HTTP header parsing and manipulation with case-insensitive handling
+- **Request Body Support**: Handles request bodies with Content-Length header
+- **Chunked Transfer Encoding**: Supports chunked response encoding with trailers
+- **Multiple Endpoints**: Includes demo endpoints with different response types
+- **Concurrent Connections**: Handles multiple simultaneous client connections using goroutines [2](#0-1) 
 
-**ðŸš€ Production-Ready Server**: The `cmd/httpServer` application demonstrates real-world usage with routing, static file serving, error handling, and HTTP proxying with chunked transfer encoding.
+## Architecture
 
-## Project Requirements
+### Core Components
 
-Before diving in, make sure your development environment meets these requirements:
+The project is organized into the following modules:
 
-- **Go 1.19+**: The project uses modern Go features and standard library APIs
-- **Unix-like OS**: Developed and tested on Linux/macOS (Windows should work but isn't explicitly tested)
-- **Network Access**: Required for the HTTP proxying features to external services
+1. **Server** (`internal/server/`): TCP listener and connection handler
+2. **Request Parser** (`internal/requests/`): HTTP request parsing state machine
+3. **Response Writer** (`internal/response/`): HTTP response construction
+4. **Headers** (`internal/headers/`): HTTP header parsing and management [3](#0-2) 
 
-The beauty of this project lies in its minimal external dependenciesâ€”most functionality is built using Go's standard library.
+### Request Processing Flow
 
-## Dependencies
+```mermaid
+graph LR
+    A["TCP Connection"] --> B["Request Parser"]
+    B --> C["Handler Function"]
+    C --> D["Response Writer"]
+    D --> E["TCP Connection"]
+```
 
-This project embraces simplicity with a carefully curated set of dependencies:
-
-### Core Framework Dependencies
-- **`net`**: TCP listener and connection management
-- **`io`**: Reader/Writer interfaces for stream operations  
-- **`bufio`**: Buffered reading with Scanner for efficient line-by-line HTTP parsing
-
-### Application-Specific Dependencies
-- **`net/http`**: HTTP client for the `/httpbin/*` proxy endpoints
-- **`crypto/sha256`**: SHA256 hash computation for response integrity headers
-- **`os`**: File system operations for static asset serving
-
-### Development Dependencies
-- **`github.com/stretchr/testify`**: Assertion library for comprehensive unit testing
-
-The minimal dependency footprint means faster builds, fewer security concerns, and easier maintenance.
-
-## Getting Started
-
-Ready to explore HTTP at the protocol level? Here's how to get the server running:
-
-### Building the Server
-
-Navigate to your project directory and build the HTTP server application:
+## Installation
 
 ```bash
-go build -o httpserver ./cmd/httpServer
+# Clone the repository
+git clone https://github.com/XxFiEnDxX/TCP-to-HTTP.git
+cd TCP-to-HTTP
+
+# Run the HTTP server
+go run cmd/httpServer/main.go
 ```
 
-This creates an executable that combines all the framework components into a ready-to-run server.
+## Usage
 
-### Basic Framework Usage
+### Running the HTTP Server
 
-If you want to build your own server using the TCP-to-HTTP framework, here's the essential pattern:
+The main HTTP server runs on port 42069: [4](#0-3) [5](#0-4) 
 
-```go
-package main
+### Available Endpoints
 
-import (
-    "github.com/XxFiEnDxX/TCP-to-HTTP/internal/server"
-    "github.com/XxFiEnDxX/TCP-to-HTTP/internal/response"
-)
+The demo server provides several test endpoints:
 
-func myHandler(w *response.Writer, req *request.Request) {
-    w.WriteStatus(200)
-    w.WriteHeader("Content-Type", "text/plain")
-    w.WriteBody("Hello from my custom server!")
-}
+- **`/`** - Returns a 200 OK success page
+- **`/yourproblem`** - Returns a 400 Bad Request error
+- **`/myproblem`** - Returns a 500 Internal Server Error
+- **`/video`** - Serves a video file with appropriate content-type
+- **`/httpbin/*`** - Proxies requests to httpbin.org with chunked transfer encoding [6](#0-5) 
 
-func main() {
-    server.Serve(8080, myHandler)
-    select {} // Keep the program running
-}
-```
+### Testing Tools
 
-The framework handles all the TCP connection management and HTTP parsingâ€”you just focus on your application logic.
+#### TCP Listener
 
-## Running the App
+A TCP listener utility for debugging HTTP requests (runs on port 42068): [7](#0-6) 
 
-### Starting the Default Server
+#### UDP Listener
 
-Launch the pre-configured HTTP server that showcases all framework capabilities:
-
-```bash
-./httpserver
-```
-
-The server starts immediately and listens on **port 42069**. You'll see output confirming the server is ready to accept connections.
-
-### Testing the Endpoints
-
-The default server provides several endpoints that demonstrate different HTTP features:
-
-**Basic HTML Response**:
-```bash
-curl http://localhost:42069/
-# Returns: 200 OK with HTML success message
-```
-
-**Error Handling Examples**:
-```bash
-curl http://localhost:42069/yourproblem
-# Returns: 400 Bad Request with humorous error message
-
-curl http://localhost:42069/myproblem  
-# Returns: 500 Internal Server Error with humorous error message
-```
-
-**Static File Serving**:
-```bash
-curl http://localhost:42069/video
-# Serves assets/vim.mp4 with proper Content-Type and Content-Length headers
-```
-
-**HTTP Proxying with Chunked Transfer**:
-```bash
-curl http://localhost:42069/httpbin/get
-# Proxies to httpbin.org with Transfer-Encoding: chunked
-# Includes X-Content-SHA256 and X-Content-Length trailer headers
-```
-
-## Code Examples
-
-### Custom Request Handler
-
-Here's how to create a sophisticated handler that demonstrates the framework's capabilities:
-
-```go
-func advancedHandler(w *response.Writer, req *request.Request) {
-    switch req.Method {
-    case "GET":
-        if req.Path == "/api/status" {
-            w.WriteStatus(200)
-            w.WriteHeader("Content-Type", "application/json")
-            w.WriteBody(`{"status": "healthy", "version": "1.0.0"}`)
-        } else {
-            w.WriteStatus(404)
-            w.WriteHeader("Content-Type", "text/plain")
-            w.WriteBody("Endpoint not found")
-        }
-    case "POST":
-        // Handle POST requests with request body parsing
-        body := req.Body
-        w.WriteStatus(201)
-        w.WriteHeader("Content-Type", "text/plain")
-        w.WriteBody("Created resource with body: " + body)
-    default:
-        w.WriteStatus(405)
-        w.WriteHeader("Allow", "GET, POST")
-        w.WriteBody("Method not allowed")
-    }
-}
-```
-
-### Request Parsing Deep Dive
-
-The framework's request parser handles the complexity of HTTP protocol parsing:
-
-```go
-// The parser converts raw TCP bytes into structured Request objects
-type Request struct {
-    Method  string
-    Path    string  
-    Headers map[string]string
-    Body    string
-}
-
-// Example of what gets parsed from TCP stream:
-// "GET /api/users HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.68.0\r\n\r\n"
-// Becomes:
-// Request{
-//     Method: "GET",
-//     Path: "/api/users", 
-//     Headers: {"Host": "localhost:42069", "User-Agent": "curl/7.68.0"}
-// }
-```
-
-### Response Writer Usage
-
-The response writer provides a clean API for HTTP response generation:
-
-```go
-func jsonHandler(w *response.Writer, req *request.Request) {
-    data := map[string]interface{}{
-        "message": "Hello World",
-        "timestamp": time.Now().Unix(),
-        "client_ip": req.RemoteAddr,
-    }
-    
-    jsonBytes, _ := json.Marshal(data)
-    
-    w.WriteStatus(200)
-    w.WriteHeader("Content-Type", "application/json")
-    w.WriteHeader("Cache-Control", "no-cache")
-    w.WriteBody(string(jsonBytes))
-}
-```
-
-## Architecture Overview
-
-The framework follows a clean separation of concerns across four main components:
-
-### Server Component (`internal/server`)
-Manages TCP connection lifecycle with a goroutine-per-connection model. Each incoming connection gets its own goroutine for concurrent request handling without blocking.
-
-### Request Parser (`internal/requests`)  
-Implements a state machine that converts raw TCP byte streams into structured `Request` objects. Handles HTTP method parsing, header extraction, and body reading according to HTTP/1.1 specifications.
-
-### Response Writer (`internal/response`)
-Provides a fluent API for generating properly formatted HTTP responses. Handles status codes, headers, and body content with automatic Content-Length calculation.
-
-### Headers System (`internal/headers`)
-Manages HTTP header parsing and validation with case-insensitive storage and retrieval. Supports all standard HTTP headers plus custom header handling.
+A UDP client for testing UDP communication: [8](#0-7) 
 
 ## Project Structure
 
-The codebase follows Go's standard project layout for maximum clarity:
-
 ```
-â”œâ”€â”€ cmd/                    # Executable applications
-â”‚   â”œâ”€â”€ httpServer/        # Production HTTP server
-â”‚   â””â”€â”€ tcplistener/       # Diagnostic TCP listener
-â”œâ”€â”€ internal/              # Private framework packages  
-â”‚   â”œâ”€â”€ server/           # TCP connection management
-â”‚   â”œâ”€â”€ requests/         # HTTP request parsing
-â”‚   â”œâ”€â”€ response/         # HTTP response generation
-â”‚   â””â”€â”€ headers/          # Header parsing and storage
-â”œâ”€â”€ assets/               # Static files (vim.mp4)
-â”œâ”€â”€ tmp/                  # Test fixtures and samples
-â””â”€â”€ go.mod               # Go module dependencies
+TCP-to-HTTP/
+├── cmd/
+│   ├── httpServer/    # Main HTTP server application
+│   ├── tcplistener/   # TCP debugging tool
+│   └── udplistener/   # UDP testing client
+└── internal/
+    ├── headers/       # HTTP header parsing and management
+    ├── requests/      # HTTP request parser
+    ├── response/      # HTTP response writer
+    └── server/        # TCP server and connection handler
 ```
 
-This structure makes it easy to understand the separation between reusable framework code (`internal/`) and application-specific implementations (`cmd/`).
+## Implementation Details
 
-## Why Build This?
+### Request Parsing
 
-Traditional HTTP servers abstract away the protocol details, which is great for productivity but not for understanding. This project gives you x-ray vision into HTTP:
+The request parser implements a state machine with the following states:
+- `StateInit`: Initial state, parsing request line
+- `StateHeader`: Parsing headers
+- `StateBody`: Reading request body
+- `StateDone`: Parsing complete [9](#0-8) 
 
-- **Educational Value**: See exactly how HTTP requests are parsed byte-by-byte
-- **Protocol Control**: Handle edge cases and implement custom HTTP behavior  
-- **Performance Insights**: Understand the real cost of HTTP parsing and response generation
-- **Foundation Knowledge**: Build the skills to debug network issues and optimize server performance
+### Response Status Codes
 
-Whether you're a systems programming enthusiast or need fine-grained control over HTTP handling, this framework provides the foundation without sacrificing Go's simplicity and performance.
+Supported HTTP status codes:
+- 200 OK
+- 400 Bad Request
+- 500 Internal Server Error [10](#0-9) 
 
-## Ready to Dive Deeper?
+### Chunked Transfer Encoding
 
-This TCP-to-HTTP framework opens up a world of possibilities for custom server development. From learning HTTP internals to building specialized network applications, you now have the tools to work at the protocol level.
+The server supports HTTP chunked transfer encoding with trailer headers, demonstrated in the `/httpbin/*` endpoint which streams responses in 32-byte chunks and includes SHA-256 checksum and content length in the trailers. [11](#0-10) 
 
-Start by running the example server, explore the endpoints, and then dive into the source code to see how each component works. The modular design makes it easy to understand each piece independently, then see how they work together to create a complete HTTP server.
+## Notes
 
-**Next Steps**: Try modifying the handler functions, add new endpoints, or use the framework components to build your own custom server application. The code is designed to be readable and extensibleâ€”perfect for experimentation and learning.
+- This is an educational/demonstration project showing how HTTP servers work at a low level
+- The server currently only supports HTTP/1.1
+- Chunked request encoding is not yet implemented (only chunked responses)
+- The server uses graceful shutdown handling with signal interrupts
+- All header names are normalized to lowercase for case-insensitive comparison
 
-Happy coding, and enjoy exploring the foundations of web communication! ðŸš€
+### Citations
+
+**File:** internal/server/server.go (L50-62)
+```go
+func Serve(port uint16, handler Handler) (*Server, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{
+		closed:  false,
+		handler: handler,
+	}
+	go runServer(server, listener)
+
+	return server, nil
+}
+```
+
+**File:** internal/requests/request.go (L12-20)
+```go
+type parseState string
+
+const (
+	StateInit   parseState = "init"
+	StateHeader parseState = "headers"
+	StateBody   parseState = "body"
+	StateDone   parseState = "done"
+	StateError  parseState = "error"
+)
+```
+
+**File:** internal/requests/request.go (L164-185)
+```go
+func RequestFromReader(reader io.Reader) (*Request, error) {
+	request := newRequest()
+
+	buf := make([]byte, 1024)
+	bufLen := 0
+	for !request.done() {
+		n, err := reader.Read(buf[bufLen:])
+		if err != nil {
+			return nil, err
+		}
+
+		bufLen += n
+		readN, err := request.parse(buf[:bufLen])
+		if err != nil {
+			return nil, err
+		}
+
+		copy(buf, buf[readN:bufLen])
+		bufLen -= readN
+	}
+	return request, nil
+}
+```
+
+**File:** internal/headers/headers.go (L56-94)
+```go
+type Headers struct {
+	headers map[string]string
+}
+
+func NewHeaders() *Headers {
+	return &Headers{
+		headers: map[string]string{},
+	}
+}
+
+func (h *Headers) Get(name string) (string, bool) {
+	str, ok := h.headers[strings.ToLower(name)]
+	return str, ok
+}
+
+func (h *Headers) Replace(name, value string) {
+	name = strings.ToLower(name)
+	h.headers[name] = value
+}
+
+func (h *Headers) Delete(name string) {
+	name = strings.ToLower(name)
+	delete(h.headers, name)
+}
+
+func (h *Headers) Set(name, value string) {
+	name = strings.ToLower(name)
+	if v, ok := h.headers[name]; ok {
+		h.headers[name] = fmt.Sprintf("%s,%s", v, value)
+	} else {
+		h.headers[name] = value
+	}
+}
+
+func (h *Headers) ForEach(cb func(n, v string)) {
+	for n, v := range h.headers {
+		cb(n, v)
+	}
+}
+```
+
+**File:** cmd/httpServer/main.go (L19-19)
+```go
+const port = 42069
+```
+
+**File:** cmd/httpServer/main.go (L74-130)
+```go
+		if req.RequestLine.RequestTarget == "/yourproblem" {
+			body = response400()
+			status = response.StatusBadRequest
+		} else if req.RequestLine.RequestTarget == "/myproblem" {
+			body = response500()
+			status = response.StatusInternalServeError
+		} else if req.RequestLine.RequestTarget == "/video" {
+			f, _ := os.ReadFile("assets/vim.mp4")
+			h.Replace("content-type", "video/mp4")
+			h.Replace("content-length", fmt.Sprintf("%d", len(f)))
+
+			w.WriteStatusLine(response.StatusOK)
+			w.WriteHeaders(*h)
+			w.WriteBody(f)
+
+			return
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+			target := req.RequestLine.RequestTarget
+			res, err := http.Get("https://httpbin.org/" + target[len("/httpbin/"):])
+
+			// res, err := http.Get("https://httpbin.org/stream/2")
+			if err != nil {
+				body = response500()
+				status = response.StatusInternalServeError
+			} else {
+				w.WriteStatusLine(response.StatusOK)
+
+				h.Delete("Content-length")
+				h.Set("transfer-encoding", "chunked")
+				h.Replace("Content-Type", "text/plain")
+				h.Set("Trailer", "X-Content-SHA256")
+				h.Set("Trailer", "X-Content-Length ")
+				w.WriteHeaders(*h)
+
+				fullBody := []byte{}
+
+				for {
+					data := make([]byte, 32)
+					n, err := res.Body.Read(data)
+					if err != nil {
+						break
+					}
+
+					fullBody = append(fullBody, data[:n]...)
+					w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n)))
+					w.WriteBody(data[:n])
+					w.WriteBody([]byte("\r\n"))
+				}
+				w.WriteBody([]byte("0\r\n"))
+				tailers := headers.NewHeaders()
+				out := sha256.Sum256(fullBody)
+				tailers.Set("X-Content-SHA256", toStr(out[:]))
+				tailers.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+				w.WriteHeaders(*tailers)
+				return
+			}
+		}
+```
+
+**File:** cmd/httpServer/main.go (L143-143)
+```go
+	log.Println("Server started on port", port)
+```
+
+**File:** cmd/tcplistener/main.go (L17-44)
+```go
+	listener, err := net.Listen("tcp", ":42068")
+
+	if err != nil {
+		log.Fatal("Error", "Error", err)
+	}
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Fatal("Error", "Error", err)
+		}
+
+		r, err := request.RequestFromReader(conn)
+		if err != nil {
+			log.Fatal("Error", "Error", err)
+		}
+
+		fmt.Printf("Request line: \n")
+		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
+		fmt.Printf("- Target: %s\n", r.RequestLine.RequestTarget)
+		fmt.Printf("- Version: %s\n", r.RequestLine.HttpVersion)
+		fmt.Printf("Headers: \n")
+		r.Headers.ForEach(func(n, v string) {
+			fmt.Printf("- %s: %s\n", n, v)
+		})
+		fmt.Printf("Body: \n")
+		fmt.Printf("%s \n", r.Body)
+	}
+```
+
+**File:** cmd/udplistener/main.go (L10-26)
+```go
+func main() {
+	serverAddr := "localhost:42069"
+
+	udpAddr, err := net.ResolveUDPAddr("udp", serverAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error resolving UDP address: %v\n", err)
+		os.Exit(1)
+	}
+
+	conn, err := net.DialUDP("udp", nil, udpAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error dialing UDP: %v\n", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	fmt.Printf("Sending to %s. Type your message and press Enter to send. Press Ctrl+C to exit.\n", serverAddr)
+```
+
+**File:** internal/response/response.go (L16-20)
+```go
+const (
+	StatusOK                 StatusCode = 200
+	StatusBadRequest         StatusCode = 400
+	StatusInternalServeError StatusCode = 500
+)
+```
