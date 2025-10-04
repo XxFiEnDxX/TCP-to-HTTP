@@ -1,179 +1,260 @@
-# TCP-to-HTTP Framework
+# TCP-to-HTTP Server Framework
 
-Ever wondered how HTTP actually works under the hood? This project strips away the magic of Go's standard `net/http` package and builds an HTTP/1.1 server directly on raw TCP sockets. It's like building a car engine from scratch to understand how it really works.
+Welcome to TCP-to-HTTP, a custom HTTP/1.1 server implementation built directly on raw TCP sockets in Go. Think of it as rolling your own HTTP server from scratchâ€”no `net/http` package shortcuts here. This project gives you complete control over every byte that flows through your server, making it perfect for learning HTTP internals or building specialized server applications.
 
-The TCP-to-HTTP framework serves dual purposes: it's both a reusable library for building custom HTTP-like servers and a production-ready HTTP server that demonstrates real-world usage patterns. Think of it as your gateway to understanding the nuts and bolts of web communication.
+Unlike traditional Go HTTP servers that rely on the standard library's abstractions, this implementation parses HTTP requests byte-by-byte from TCP streams and handles the entire HTTP/1.1 protocol lifecycle manually. It's like building a car engine instead of just turning the key.
 
 ## What Makes This Special
 
-While most Go HTTP servers rely on the convenience of `net/http`, this implementation parses HTTP requests byte-by-byte from raw TCP streams. It's educational, powerful, and gives you complete control over request parsing and response generation.
+This repository serves dual purposes that make it both educational and practical:
 
-The project follows Go's clean architecture principles with a clear separation between reusable framework components and application-specific logic. This means you can use the internal packages to build your own custom servers or study the `cmd/httpServer` example to see how everything fits together.
+**ðŸ”§ Reusable Framework**: The modular design in `internal/` packages provides building blocks for creating custom HTTP-like servers with full protocol control.
+
+**ðŸš€ Production-Ready Server**: The `cmd/httpServer` application demonstrates real-world usage with routing, static file serving, error handling, and HTTP proxying with chunked transfer encoding.
 
 ## Project Requirements
 
-- **Go 1.16+**: This project uses Go modules and requires a modern Go installation
-- **Network access**: The HTTP server needs to bind to port 42069 and make outbound connections for proxy features
-- **Unix-like environment**: While Go is cross-platform, the project has been primarily tested on Linux and macOS
+Before diving in, make sure your development environment meets these requirements:
+
+- **Go 1.19+**: The project uses modern Go features and standard library APIs
+- **Unix-like OS**: Developed and tested on Linux/macOS (Windows should work but isn't explicitly tested)
+- **Network Access**: Required for the HTTP proxying features to external services
+
+The beauty of this project lies in its minimal external dependenciesâ€”most functionality is built using Go's standard library.
 
 ## Dependencies
 
-This project deliberately uses minimal external dependencies to showcase raw TCP/HTTP implementation:
+This project embraces simplicity with a carefully curated set of dependencies:
 
-### Core Dependencies (Framework)
-- `net`: TCP listener and connection management
-- `io`: Reader/Writer interfaces for I/O operations  
-- `bufio`: Buffered reading with Scanner for line-by-line HTTP parsing
-- `strings`: String manipulation for HTTP header processing
+### Core Framework Dependencies
+- **`net`**: TCP listener and connection management
+- **`io`**: Reader/Writer interfaces for stream operations  
+- **`bufio`**: Buffered reading with Scanner for efficient line-by-line HTTP parsing
 
-### Application Dependencies (HTTP Server)
-- `net/http`: HTTP client for proxy functionality only
-- `crypto/sha256`: SHA256 hashing for response integrity headers
-- `os`: File I/O for static file serving
+### Application-Specific Dependencies
+- **`net/http`**: HTTP client for the `/httpbin/*` proxy endpoints
+- **`crypto/sha256`**: SHA256 hash computation for response integrity headers
+- **`os`**: File system operations for static asset serving
 
-### Test Dependencies
-- `github.com/stretchr/testify`: Assertion library for unit tests
+### Development Dependencies
+- **`github.com/stretchr/testify`**: Assertion library for comprehensive unit testing
 
-The lightweight dependency footprint means you can easily understand and modify every aspect of the HTTP implementation without wrestling with complex external libraries.
+The minimal dependency footprint means faster builds, fewer security concerns, and easier maintenance.
 
 ## Getting Started
 
-### Running the HTTP Server
+Ready to explore HTTP at the protocol level? Here's how to get the server running:
 
-The main HTTP server application runs on port 42069 and provides several interesting endpoints:
+### Building the Server
 
-```bash
-go run cmd/httpServer/main.go
-```
-
-Once running, you can test the various endpoints:
+Navigate to your project directory and build the HTTP server application:
 
 ```bash
-# Basic success response
-curl http://localhost:42069/
-
-# Error responses with personality
-curl http://localhost:42069/yourproblem
-curl http://localhost:42069/myproblem
-
-# Static video file serving
-curl -I http://localhost:42069/video
-
-# HTTP proxying with chunked encoding
-curl http://localhost:42069/httpbin/get
+go build -o httpserver ./cmd/httpServer
 ```
 
-### Running the TCP Listener (Diagnostic Tool)
+This creates an executable that combines all the framework components into a ready-to-run server.
 
-For debugging and learning purposes, you can also run the raw TCP listener:
+### Basic Framework Usage
 
-```bash
-go run cmd/tcplistener/main.go
-```
-
-This tool accepts raw TCP connections and parses HTTP requests without generating responses, making it perfect for understanding the request parsing process.
-
-## Code Examples
-
-### Basic TCP-to-HTTP Server
-
-Here's how simple it is to create your own HTTP-like server using the framework:
+If you want to build your own server using the TCP-to-HTTP framework, here's the essential pattern:
 
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/yourusername/tcp-to-http/internal/server"
-    "github.com/yourusername/tcp-to-http/internal/response"
-    "github.com/yourusername/tcp-to-http/internal/requests"
+    "github.com/XxFiEnDxX/TCP-to-HTTP/internal/server"
+    "github.com/XxFiEnDxX/TCP-to-HTTP/internal/response"
 )
 
-func myHandler(w *response.Writer, req *requests.Request) {
-    if req.Path == "/" {
-        w.WriteStatusLine("200 OK")
-        w.WriteHeader("Content-Type", "text/plain")
-        w.FinishHeaders()
-        w.WriteBody("Hello from raw TCP!")
-    } else {
-        w.WriteStatusLine("404 Not Found")
-        w.FinishHeaders()
-    }
+func myHandler(w *response.Writer, req *request.Request) {
+    w.WriteStatus(200)
+    w.WriteHeader("Content-Type", "text/plain")
+    w.WriteBody("Hello from my custom server!")
 }
 
 func main() {
     server.Serve(8080, myHandler)
+    select {} // Keep the program running
 }
 ```
 
-### Custom Request Processing
+The framework handles all the TCP connection management and HTTP parsingâ€”you just focus on your application logic.
 
-The framework gives you full access to parsed HTTP components:
+## Running the App
+
+### Starting the Default Server
+
+Launch the pre-configured HTTP server that showcases all framework capabilities:
+
+```bash
+./httpserver
+```
+
+The server starts immediately and listens on **port 42069**. You'll see output confirming the server is ready to accept connections.
+
+### Testing the Endpoints
+
+The default server provides several endpoints that demonstrate different HTTP features:
+
+**Basic HTML Response**:
+```bash
+curl http://localhost:42069/
+# Returns: 200 OK with HTML success message
+```
+
+**Error Handling Examples**:
+```bash
+curl http://localhost:42069/yourproblem
+# Returns: 400 Bad Request with humorous error message
+
+curl http://localhost:42069/myproblem  
+# Returns: 500 Internal Server Error with humorous error message
+```
+
+**Static File Serving**:
+```bash
+curl http://localhost:42069/video
+# Serves assets/vim.mp4 with proper Content-Type and Content-Length headers
+```
+
+**HTTP Proxying with Chunked Transfer**:
+```bash
+curl http://localhost:42069/httpbin/get
+# Proxies to httpbin.org with Transfer-Encoding: chunked
+# Includes X-Content-SHA256 and X-Content-Length trailer headers
+```
+
+## Code Examples
+
+### Custom Request Handler
+
+Here's how to create a sophisticated handler that demonstrates the framework's capabilities:
 
 ```go
-func advancedHandler(w *response.Writer, req *requests.Request) {
-    // Access HTTP method
-    fmt.Printf("Method: %s\n", req.Method)
-    
-    // Inspect headers
-    contentType := req.Headers.Get("Content-Type")
-    userAgent := req.Headers.Get("User-Agent")
-    
-    // Process request body
-    if req.Body != "" {
-        fmt.Printf("Body: %s\n", req.Body)
+func advancedHandler(w *response.Writer, req *request.Request) {
+    switch req.Method {
+    case "GET":
+        if req.Path == "/api/status" {
+            w.WriteStatus(200)
+            w.WriteHeader("Content-Type", "application/json")
+            w.WriteBody(`{"status": "healthy", "version": "1.0.0"}`)
+        } else {
+            w.WriteStatus(404)
+            w.WriteHeader("Content-Type", "text/plain")
+            w.WriteBody("Endpoint not found")
+        }
+    case "POST":
+        // Handle POST requests with request body parsing
+        body := req.Body
+        w.WriteStatus(201)
+        w.WriteHeader("Content-Type", "text/plain")
+        w.WriteBody("Created resource with body: " + body)
+    default:
+        w.WriteStatus(405)
+        w.WriteHeader("Allow", "GET, POST")
+        w.WriteBody("Method not allowed")
+    }
+}
+```
+
+### Request Parsing Deep Dive
+
+The framework's request parser handles the complexity of HTTP protocol parsing:
+
+```go
+// The parser converts raw TCP bytes into structured Request objects
+type Request struct {
+    Method  string
+    Path    string  
+    Headers map[string]string
+    Body    string
+}
+
+// Example of what gets parsed from TCP stream:
+// "GET /api/users HTTP/1.1\r\nHost: localhost:42069\r\nUser-Agent: curl/7.68.0\r\n\r\n"
+// Becomes:
+// Request{
+//     Method: "GET",
+//     Path: "/api/users", 
+//     Headers: {"Host": "localhost:42069", "User-Agent": "curl/7.68.0"}
+// }
+```
+
+### Response Writer Usage
+
+The response writer provides a clean API for HTTP response generation:
+
+```go
+func jsonHandler(w *response.Writer, req *request.Request) {
+    data := map[string]interface{}{
+        "message": "Hello World",
+        "timestamp": time.Now().Unix(),
+        "client_ip": req.RemoteAddr,
     }
     
-    // Generate custom response
-    w.WriteStatusLine("200 OK")
-    w.WriteHeader("X-Custom-Header", "processed-by-tcp-framework")
+    jsonBytes, _ := json.Marshal(data)
+    
+    w.WriteStatus(200)
     w.WriteHeader("Content-Type", "application/json")
-    w.FinishHeaders()
-    w.WriteBody(`{"status": "success", "method": "` + req.Method + `"}`)
-}
-```
-
-### Error Handling and Logging
-
-The framework provides clean error handling patterns:
-
-```go
-func handleConnection(conn net.Conn) {
-    defer conn.Close()
-    
-    req, err := requests.RequestFromReader(conn)
-    if err != nil {
-        log.Printf("Failed to parse request: %v", err)
-        return
-    }
-    
-    w := response.NewWriter(conn)
-    handler(w, req)
+    w.WriteHeader("Cache-Control", "no-cache")
+    w.WriteBody(string(jsonBytes))
 }
 ```
 
 ## Architecture Overview
 
-The project is structured around clean separation of concerns:
+The framework follows a clean separation of concerns across four main components:
 
-### Framework Components (`internal/`)
+### Server Component (`internal/server`)
+Manages TCP connection lifecycle with a goroutine-per-connection model. Each incoming connection gets its own goroutine for concurrent request handling without blocking.
 
-- **`server/`**: Manages TCP connections and goroutine lifecycle
-- **`requests/`**: Parses raw TCP bytes into structured HTTP requests
-- **`response/`**: Formats and writes HTTP responses back to clients  
-- **`headers/`**: Handles HTTP header parsing and storage
+### Request Parser (`internal/requests`)  
+Implements a state machine that converts raw TCP byte streams into structured `Request` objects. Handles HTTP method parsing, header extraction, and body reading according to HTTP/1.1 specifications.
 
-### Applications (`cmd/`)
+### Response Writer (`internal/response`)
+Provides a fluent API for generating properly formatted HTTP responses. Handles status codes, headers, and body content with automatic Content-Length calculation.
 
-- **`httpServer/`**: Production HTTP server with routing, static files, and proxying
-- **`tcplistener/`**: Diagnostic tool for request parsing analysis
+### Headers System (`internal/headers`)
+Manages HTTP header parsing and validation with case-insensitive storage and retrieval. Supports all standard HTTP headers plus custom header handling.
 
-The goroutine-per-connection model ensures excellent concurrency while keeping the code simple and readable. Each client connection runs in its own goroutine, allowing the server to handle hundreds of concurrent requests efficiently.
+## Project Structure
+
+The codebase follows Go's standard project layout for maximum clarity:
+
+```
+â”œâ”€â”€ cmd/                    # Executable applications
+â”‚   â”œâ”€â”€ httpServer/        # Production HTTP server
+â”‚   â””â”€â”€ tcplistener/       # Diagnostic TCP listener
+â”œâ”€â”€ internal/              # Private framework packages  
+â”‚   â”œâ”€â”€ server/           # TCP connection management
+â”‚   â”œâ”€â”€ requests/         # HTTP request parsing
+â”‚   â”œâ”€â”€ response/         # HTTP response generation
+â”‚   â””â”€â”€ headers/          # Header parsing and storage
+â”œâ”€â”€ assets/               # Static files (vim.mp4)
+â”œâ”€â”€ tmp/                  # Test fixtures and samples
+â””â”€â”€ go.mod               # Go module dependencies
+```
+
+This structure makes it easy to understand the separation between reusable framework code (`internal/`) and application-specific implementations (`cmd/`).
 
 ## Why Build This?
 
-Understanding HTTP at the TCP level gives you superpowers as a web developer. You'll understand why certain performance optimizations work, how to debug network issues, and gain insight into how web frameworks actually function under the hood.
+Traditional HTTP servers abstract away the protocol details, which is great for productivity but not for understanding. This project gives you x-ray vision into HTTP:
 
-This project is perfect for developers who want to understand the magic behind `net/http`, students learning network programming, or anyone building custom protocols that need HTTP-like request/response patterns.
+- **Educational Value**: See exactly how HTTP requests are parsed byte-by-byte
+- **Protocol Control**: Handle edge cases and implement custom HTTP behavior  
+- **Performance Insights**: Understand the real cost of HTTP parsing and response generation
+- **Foundation Knowledge**: Build the skills to debug network issues and optimize server performance
 
-Ready to dive deep into the world of HTTP? Clone this repository and start exploring how the web really works, one TCP byte at a time.
+Whether you're a systems programming enthusiast or need fine-grained control over HTTP handling, this framework provides the foundation without sacrificing Go's simplicity and performance.
+
+## Ready to Dive Deeper?
+
+This TCP-to-HTTP framework opens up a world of possibilities for custom server development. From learning HTTP internals to building specialized network applications, you now have the tools to work at the protocol level.
+
+Start by running the example server, explore the endpoints, and then dive into the source code to see how each component works. The modular design makes it easy to understand each piece independently, then see how they work together to create a complete HTTP server.
+
+**Next Steps**: Try modifying the handler functions, add new endpoints, or use the framework components to build your own custom server application. The code is designed to be readable and extensibleâ€”perfect for experimentation and learning.
+
+Happy coding, and enjoy exploring the foundations of web communication! ðŸš€
